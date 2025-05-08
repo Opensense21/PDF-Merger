@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Merger</title>
+    <title>PDF Manager</title>
     <script src="https://unpkg.com/pdf-lib@1.17.0/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -39,6 +41,10 @@
             display: flex;
             align-items: center;
             margin: 5px 0;
+            padding: 5px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            cursor: move;
         }
         .file-item input {
             margin-left: 10px;
@@ -72,21 +78,57 @@
         input[type="file"] {
             display: none;
         }
-        #outputName {
+        #outputName, #watermark {
             padding: 5px;
             margin: 10px;
             width: 200px;
         }
+        #operationSection {
+            margin: 10px 0;
+        }
+        #progress {
+            display: none;
+            margin: 10px;
+            width: 40px;
+            height: 40px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        select {
+            padding: 5px;
+            margin: 10px;
+        }
     </style>
 </head>
 <body>
-    <h1>PDF Merger</h1>
-    <div id="dropZone">Attach or Drag PDFs to Merge</div>
+    <h1>PDF Manager</h1>
+    <div id="dropZone">Attach or Drag PDFs</div>
     <input type="file" id="fileInput" accept="application/pdf" multiple>
     <div id="fileList"></div>
-    <label for="outputName">Output Filename:</label>
-    <input type="text" id="outputName" placeholder="merged.pdf" value="merged.pdf">
-    <button id="mergeButton" disabled>Merge PDFs</button>
+    <div id="operationSection" style="display: none;">
+        <label>Operation:</label>
+        <button id="mergeButton" disabled>Merge</button>
+        <button id="splitButton" disabled>Split</button>
+        <button id="rotateButton" disabled>Rotate Pages</button>
+        <select id="rotateAngle">
+            <option value="90">90°</option>
+            <option value="180">180°</option>
+            <option value="270">270°</option>
+        </select>
+        <br>
+        <label for="outputName">Output Filename:</label>
+        <input type="text" id="outputName" placeholder="e.g., merged.pdf" value="merged.pdf">
+        <br>
+        <label for="watermark">Watermark (optional):</label>
+        <input type="text" id="watermark" placeholder="Enter watermark text">
+    </div>
+    <div id="progress"></div>
     <button id="startOverButton">Start Over</button>
 
     <script>
@@ -94,9 +136,26 @@
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
         const mergeButton = document.getElementById('mergeButton');
-        const startOverButton = document.getElementById('startOverButton');
+        const splitButton = document.getElementById('splitButton');
+        const rotateButton = document.getElementById('rotateButton');
+        const rotateAngle = document.getElementById('rotateAngle');
         const outputNameInput = document.getElementById('outputName');
+        const watermarkInput = document.getElementById('watermark');
+        const operationSection = document.getElementById('operationSection');
+        const progress = document.getElementById('progress');
+        const startOverButton = document.getElementById('startOverButton');
         let pdfFiles = [];
+
+        // Initialize drag-and-drop sorting
+        new Sortable(fileList, {
+            animation: 150,
+            onEnd: () => {
+                const newOrder = Array.from(fileList.children).map(item => 
+                    pdfFiles.find(f => f.file.name === item.querySelector('input').dataset.filename)
+                );
+                pdfFiles = newOrder;
+            }
+        });
 
         // Handle click to open file input
         dropZone.addEventListener('click', () => fileInput.click());
@@ -127,7 +186,7 @@
                     displayFile(file, pageCount);
                 }
             }
-            updateMergeButton();
+            updateUI();
         }
 
         function displayFile(file, pageCount) {
@@ -135,14 +194,14 @@
             div.className = 'file-item';
             div.innerHTML = `
                 ${file.name} (${pageCount} pages)
-                <input type="text" placeholder="e.g., 1-3,5" data-filename="${file.name}">
+                <input type="text" placeholder="e.g., 1-3, 5" data-filename="${file.name}">
                 <button onclick="removeFile('${file.name}')">Remove</button>
             `;
             fileList.appendChild(div);
             div.querySelector('input').addEventListener('change', (e) => {
                 const index = pdfFiles.findIndex(f => f.file.name === file.name);
                 pdfFiles[index].pages = e.target.value;
-                updateMergeButton();
+                updateUI();
             });
         }
 
@@ -154,16 +213,29 @@
                     item.remove();
                 }
             });
-            updateMergeButton();
+            updateUI();
         }
 
-        function updateMergeButton() {
+        function updateUI() {
+            operationSection.style.display = pdfFiles.length > 0 ? 'block' : 'none';
             mergeButton.disabled = pdfFiles.length < 1 || !validatePageRanges();
+            splitButton.disabled = pdfFiles.length === 0 || !validatePageRanges(0);
+            rotateButton.disabled = pdfFiles.length === 0 || !validatePageRanges(0);
         }
 
-        function validatePageRanges() {
+        function validatePageRanges(index = -1) {
+            if (index >= 0) {
+                const file = pdfFiles[index];
+                if (!file.pages) return true;
+                try {
+                    const indices = parsePageRanges(file.pages, file.pageCount);
+                    return indices.length > 0;
+                } catch {
+                    return false;
+                }
+            }
             return pdfFiles.every(file => {
-                if (!file.pages) return true; // No range specified, include all pages
+                if (!file.pages) return true;
                 try {
                     const indices = parsePageRanges(file.pages, file.pageCount);
                     return indices.length > 0;
@@ -197,11 +269,29 @@
             return [...new Set(indices)].sort((a, b) => a - b);
         }
 
+        async function addWatermark(pdfDoc, text) {
+            if (!text) return;
+            const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+            const pages = pdfDoc.getPages();
+            for (const page of pages) {
+                const { width, height } = page.getSize();
+                page.drawText(text, {
+                    x: width / 2 - 50,
+                    y: height / 2,
+                    size: 50,
+                    font,
+                    color: PDFLib.rgb(0.5, 0.5, 0.5),
+                    opacity: 0.3,
+                    rotate: PDFLib.degrees(45)
+                });
+            }
+        }
+
         mergeButton.addEventListener('click', async () => {
-            mergeButton.disabled = true;
+            progress.style.display = 'block';
             try {
                 const mergedPdf = await mergePDFs();
-                const filename = outputNameInput.value.trim() || 'merged.pdf';
+                const filename = outputNameInput.value.trim() || 'merged';
                 const finalFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
                 const blob = new Blob([mergedPdf], { type: 'application/pdf' });
                 const url = URL.createObjectURL(blob);
@@ -213,7 +303,7 @@
             } catch (error) {
                 alert('Error merging PDFs: ' + error.message);
             }
-            mergeButton.disabled = false;
+            progress.style.display = 'none';
         });
 
         async function mergePDFs() {
@@ -225,14 +315,77 @@
                 const copiedPages = await mergedPdfDoc.copyPages(pdfDoc, pageIndices);
                 copiedPages.forEach(page => mergedPdfDoc.addPage(page));
             }
+            await addWatermark(mergedPdfDoc, watermarkInput.value.trim());
             return await mergedPdfDoc.save();
         }
+
+        splitButton.addEventListener('click', async () => {
+            if (pdfFiles.length === 0) return;
+            progress.style.display = 'block';
+            try {
+                const zip = new JSZip();
+                const { file, pages, pageCount } = pdfFiles[0];
+                const arrayBuffer = await file.arrayBuffer();
+                const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                const pageIndices = parsePageRanges(pages, pageCount);
+                for (const [i, pageIndex] of pageIndices.entries()) {
+                    const newPdf = await PDFLib.PDFDocument.create();
+                    const [copiedPage] = await newPdf.copyPages(pdfDoc, [pageIndex]);
+                    newPdf.addPage(copiedPage);
+                    await addWatermark(newPdf, watermarkInput.value.trim());
+                    const pdfBytes = await newPdf.save();
+                    zip.file(`split_page_${pageIndex + 1}.pdf`, pdfBytes);
+                }
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const filename = outputNameInput.value.trim() || 'split';
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${filename}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                alert('Error splitting PDF: ' + error.message);
+            }
+            progress.style.display = 'none';
+        });
+
+        rotateButton.addEventListener('click', async () => {
+            if (pdfFiles.length === 0) return;
+            progress.style.display = 'block';
+            try {
+                const { file, pages, pageCount } = pdfFiles[0];
+                const arrayBuffer = await file.arrayBuffer();
+                const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                const pageIndices = parsePageRanges(pages, pageCount);
+                const angle = parseInt(rotateAngle.value);
+                for (const index of pageIndices) {
+                    const page = pdfDoc.getPage(index);
+                    page.setRotation(PDFLib.degrees(page.getRotation().angle + angle));
+                }
+                await addWatermark(pdfDoc, watermarkInput.value.trim());
+                const pdfBytes = await pdfDoc.save();
+                const filename = outputNameInput.value.trim() || 'rotated';
+                const finalFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = finalFilename;
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                alert('Error rotating PDF: ' + error.message);
+            }
+            progress.style.display = 'none';
+        });
 
         startOverButton.addEventListener('click', () => {
             pdfFiles = [];
             fileList.innerHTML = '';
             outputNameInput.value = 'merged.pdf';
-            updateMergeButton();
+            watermarkInput.value = '';
+            updateUI();
         });
     </script>
 </body>
