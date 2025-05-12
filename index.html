@@ -3,96 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Manager</title>
+    <title>PDF Manager - Open Sense</title>
     <script src="https://unpkg.com/pdf-lib@1.17.0/dist/pdf-lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Inter', sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
+            min-height: 95vh;
             margin: 0;
-            background-color: #f0f0f0;
+            background: linear-gradient(to bottom right, #f5f0ff, #e0f2f7);
+            color: #333;
+            padding: 20px;
+            box-sizing: border-box;
         }
+
+        h1 {
+            color: #6a1b9a;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
         #dropZone {
             width: 80%;
-            max-width: 600px;
+            max-width: 700px;
             height: 200px;
-            border: 2px dashed #ccc;
+            border: 2px dashed #b39ddb;
+            border-radius: 15px;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            margin: 20px 0;
-            background-color: white;
+            margin: 30px 0;
+            background-color: #ede7f6;
             cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 1.2em;
+            color: #6a1b9a;
         }
         #dropZone:hover {
-            border-color: #666;
+            border-color: #9575cd;
+            background-color: #d1c4e9;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         }
+
         #fileList {
             width: 80%;
-            max-width: 600px;
+            max-width: 700px;
             margin: 10px 0;
+            list-style: none;
+            padding: 0;
         }
+
         .file-item {
             display: flex;
-            align-items: center;
-            margin: 5px 0;
-            padding: 5px;
+            flex-direction: column;
+            margin-bottom: 12px;
+            padding: 15px 20px;
             background-color: #fff;
-            border: 1px solid #ddd;
+            border-radius: 10px;
+            border: 1px solid #e1bee7;
             cursor: move;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
         }
+        .file-item:hover {
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+
         .file-item input {
-            margin-left: 10px;
+            flex-grow: 1;
+            margin: 0 15px;
             padding: 5px;
             width: 150px;
+            border: 1px solid #e1bee7;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #555;
         }
-        .file-item button {
+
+        .preview-toggle {
+            background-color: #ce93d8;
+            color: #333;
+            padding: 5px 10px;
+            font-size: 0.9em;
+            border-radius: 5px;
             margin-left: 10px;
-            background-color: #dc3545;
         }
-        .file-item button:hover {
-            background-color: #b02a37;
+        .preview-toggle:hover {
+            background-color: #ab47bc;
+            color: white;
         }
+
+        .preview-section {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f3e5f5;
+            border-radius: 8px;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .preview-page {
+            display: inline-block;
+            margin: 0 10px;
+            text-align: center;
+        }
+
+        .preview-page canvas {
+            height: 200px;
+            border: 1px solid #b39ddb;
+            border-radius: 5px;
+            background-color: white;
+        }
+
+        .preview-page p {
+            margin: 5px 0 0;
+            font-size: 0.8em;
+            color: #4527a0;
+        }
+
         button {
             padding: 10px 20px;
             margin: 10px;
-            font-size: 16px;
+            font-size: 1em;
+            font-weight: 500;
             cursor: pointer;
-            background-color: #007bff;
-            color: white;
+            background-color: #b39ddb;
+            color: #333;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #9575cd;
+            transform: translateY(-2px);
         }
         button:disabled {
             background-color: #cccccc;
             cursor: not-allowed;
+            transform: none;
         }
+
+        .remove-button {
+            background-color: #ef9a9a;
+            padding: 5px 10px;
+            font-size: 0.9em;
+            border-radius: 5px;
+            margin-left: 10px;
+        }
+        .remove-button:hover {
+            background-color: #e57373;
+            color: white;
+            transform: translateY(-2px);
+        }
+
         input[type="file"] {
             display: none;
         }
-        #outputName, #watermark {
+
+        #outputName, #watermark, select {
             padding: 5px;
-            margin: 10px;
-            width: 200px;
+            margin: 5px 10px;
+            width: 220px;
+            border: 1px solid #e1bee7;
+            border-radius: 5px;
+            font-size: 1em;
         }
+
         #operationSection {
-            margin: 10px 0;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #ede7f6;
+            border-radius: 10px;
+            border: 1px solid #e1bee7;
         }
+
         #progress {
             display: none;
             margin: 10px;
             width: 40px;
             height: 40px;
             border: 5px solid #f3f3f3;
-            border-top: 5px solid #007bff;
+            border-top: 5px solid #7e57c2;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -100,21 +209,26 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        select {
-            padding: 5px;
-            margin: 10px;
+
+        label {
+            margin-right: 5px;
+            font-weight: 500;
+            color: #4527a0;
         }
     </style>
 </head>
 <body>
     <h1>PDF Manager</h1>
-    <div id="dropZone">Attach or Drag PDFs</div>
+    <div id="dropZone">
+        <i class="fas fa-file-upload fa-3x" style="color: #9575cd;"></i>
+        <p>Drag & Drop PDFs or Click to Upload</p>
+    </div>
     <input type="file" id="fileInput" accept="application/pdf" multiple>
     <div id="fileList"></div>
     <div id="operationSection" style="display: none;">
         <label>Operation:</label>
         <button id="mergeButton" disabled>Merge</button>
-        <button id="splitButton" disabled>Split</button>
+        <button id="splitButton" disabled>Split Pages</button>
         <button id="rotateButton" disabled>Rotate Pages</button>
         <select id="rotateAngle">
             <option value="90">90°</option>
@@ -132,6 +246,9 @@
     <button id="startOverButton">Start Over</button>
 
     <script>
+        // Configure pdf.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
@@ -154,6 +271,7 @@
                     pdfFiles.find(f => f.file.name === item.querySelector('input').dataset.filename)
                 );
                 pdfFiles = newOrder;
+                updateUI();
             }
         });
 
@@ -164,14 +282,14 @@
         fileInput.addEventListener('change', handleFiles);
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = '#666';
+            dropZone.style.borderColor = '#9575cd';
         });
         dropZone.addEventListener('dragleave', () => {
-            dropZone.style.borderColor = '#ccc';
+            dropZone.style.borderColor = '#b39ddb';
         });
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = '#ccc';
+            dropZone.style.borderColor = '#b39ddb';
             handleFiles(e);
         });
 
@@ -183,26 +301,100 @@
                     const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
                     const pageCount = pdfDoc.getPageCount();
                     pdfFiles.push({ file, pageCount, pages: '' });
-                    displayFile(file, pageCount);
+                    displayFile(file, pageCount, arrayBuffer);
                 }
             }
             updateUI();
         }
 
-        function displayFile(file, pageCount) {
+        async function displayFile(file, pageCount, arrayBuffer) {
             const div = document.createElement('div');
             div.className = 'file-item';
-            div.innerHTML = `
-                ${file.name} (${pageCount} pages)
-                <input type="text" placeholder="e.g., 1-3, 5" data-filename="${file.name}">
-                <button onclick="removeFile('${file.name}')">Remove</button>
-            `;
-            fileList.appendChild(div);
-            div.querySelector('input').addEventListener('change', (e) => {
+            const header = document.createElement('div');
+            header.className = 'file-item-header';
+
+            const fileNameSpan = document.createElement('span');
+            fileNameSpan.textContent = `${file.name} (${pageCount} pages)`;
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = 'e.g., 1-3, 5';
+            input.dataset.filename = file.name;
+            input.addEventListener('change', (e) => {
                 const index = pdfFiles.findIndex(f => f.file.name === file.name);
                 pdfFiles[index].pages = e.target.value;
                 updateUI();
             });
+
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-button';
+            removeBtn.innerHTML = `<i class="fas fa-times"></i>`;
+            removeBtn.style.backgroundColor = '#ef9a9a';
+            removeBtn.style.color = '#333';
+            removeBtn.style.padding = '5px 10px';
+            removeBtn.style.fontSize = '0.9em';
+            removeBtn.style.borderRadius = '5px';
+            removeBtn.style.marginLeft = '10px';
+            removeBtn.addEventListener('click', () => removeFile(file.name));
+
+            const previewBtn = document.createElement('button');
+            previewBtn.className = 'preview-toggle';
+            previewBtn.textContent = 'Show Previews';
+            previewBtn.addEventListener('click', () => togglePreviews(div));
+
+            header.appendChild(fileNameSpan);
+            header.appendChild(input);
+            header.appendChild(removeBtn);
+            header.appendChild(previewBtn);
+
+            const previewSection = document.createElement('div');
+            previewSection.className = 'preview-section';
+
+            div.appendChild(header);
+            div.appendChild(previewSection);
+            fileList.appendChild(div);
+
+            // Render PDF page previews
+            try {
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                for (let pageNum = 1; pageNum <= Math.min(pageCount, 50); pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const viewport = page.getViewport({ scale: 1.0 });
+                    const scale = 200 / viewport.height;
+                    const scaledViewport = page.getViewport({ scale });
+
+                    const canvas = document.createElement('canvas');
+                    canvas.height = scaledViewport.height;
+                    canvas.width = scaledViewport.width;
+
+                    const context = canvas.getContext('2d');
+                    await page.render({
+                        canvasContext: context,
+                        viewport: scaledViewport
+                    }).promise;
+
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'preview-page';
+                    pageDiv.appendChild(canvas);
+                    pageDiv.innerHTML += `<p>Page ${pageNum}</p>`;
+                    previewSection.appendChild(pageDiv);
+                }
+            } catch (error) {
+                console.error('Error rendering PDF previews:', error);
+                previewSection.innerHTML = '<p>Error loading previews</p>';
+            }
+        }
+
+        function togglePreviews(fileItem) {
+            const previewSection = fileItem.querySelector('.preview-section');
+            const previewBtn = fileItem.querySelector('.preview-toggle');
+            if (previewSection.style.display === 'block') {
+                previewSection.style.display = 'none';
+                previewBtn.textContent = 'Show Previews';
+            } else {
+                previewSection.style.display = 'block';
+                previewBtn.textContent = 'Hide Previews';
+            }
         }
 
         function removeFile(filename) {
