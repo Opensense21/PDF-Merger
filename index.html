@@ -7,8 +7,85 @@
     <script src="https://unpkg.com/pdf-lib@1.17.0/dist/pdf-lib.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        let pdfJsLoaded = false;
+        let pdfJsLoadPromise = null;
+        let loadSource = 'local-mjs';
+
+        async function onPdfJsLoaded() {
+            pdfJsLoaded = true;
+            console.log(`pdf.js loaded successfully from ${loadSource}`);
+            if (typeof pdfjsLib !== 'undefined') {
+                try {
+                    // Fetch and create a blob URL for the worker
+                    const workerResponse = await fetch('./lib/pdf.worker.mjs');
+                    if (!workerResponse.ok) {
+                        throw new Error('Failed to fetch pdf.worker.mjs');
+                    }
+                    const workerText = await workerResponse.text();
+                    const workerBlob = new Blob([workerText], { type: 'application/javascript' });
+                    const workerUrl = URL.createObjectURL(workerBlob);
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+                    console.log(`Set pdf.js workerSrc to blob URL for pdf.worker.mjs`);
+                } catch (e) {
+                    console.error('Error setting workerSrc:', e);
+                    loadFallbackPdfJs();
+                }
+            } else {
+                console.error(`pdfjsLib is not defined after ${loadSource} load`);
+                loadFallbackPdfJs();
+            }
+        }
+
+        function loadFallbackPdfJs() {
+            console.warn('Failed to load pdf.js from local .mjs file, attempting cdnjs CDN (.js)');
+            loadSource = 'cdnjs';
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdfjs-dist/4.0.379/pdf.min.js';
+            script.onload = () => {
+                pdfJsLoaded = true;
+                console.log('pdf.js loaded from cdnjs (.js)');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdfjs-dist/4.0.379/pdf.worker.min.js';
+                console.log('Set pdf.js workerSrc to cdnjs (.js)');
+            };
+            script.onerror = () => {
+                console.error('Failed to load pdf.js from both local .mjs and cdnjs CDN (.js)');
+            };
+            document.head.appendChild(script);
+        }
+
+        function waitForPdfJs(timeoutMs = 10000) {
+            if (pdfJsLoadPromise) return pdfJsLoadPromise;
+            pdfJsLoadPromise = new Promise((resolve, reject) => {
+                if (pdfJsLoaded && typeof pdfjsLib !== 'undefined') {
+                    resolve();
+                    return;
+                }
+                const startTime = Date.now();
+                const checkInterval = setInterval(() => {
+                    if (pdfJsLoaded && typeof pdfjsLib !== 'undefined') {
+                        clearInterval(checkInterval);
+                        resolve();
+                    } else if (Date.now() - startTime > timeoutMs) {
+                        clearInterval(checkInterval);
+                        reject(new Error('pdf.js failed to load within timeout'));
+                    }
+                }, 100);
+            });
+            return pdfJsLoadPromise;
+        }
+    </script>
+    <script type="module">
+        try {
+            import * as pdfjsLib from './lib/pdf.mjs';
+            window.pdfjsLib = pdfjsLib;
+            await onPdfJsLoaded();
+        } catch (e) {
+            console.error('Failed to load pdf.mjs:', e);
+            loadFallbackPdfJs();
+        }
+    </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -125,6 +202,7 @@
             margin: 0 10px;
             text-align: center;
             vertical-align: top;
+            position: relative;
         }
 
         .preview-page canvas {
@@ -138,6 +216,19 @@
             margin: 5px 0 0;
             font-size: 0.8em;
             color: #4527a0;
+        }
+
+        .preview-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #7e57c2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
 
         button {
@@ -253,9 +344,6 @@
     <button id="startOverButton">Start Over</button>
 
     <script>
-        // Configure pdf.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const fileList = document.getElementById('fileList');
@@ -314,6 +402,53 @@
             updateUI();
         }
 
+        async function renderPage(page, canvas, scale, pageNum, maxRetries = 2) {
+            let attempt = 0;
+            while (attempt <= maxRetries) {
+                try {
+                    console.log(`Rendering page ${pageNum}, attempt ${attempt + 1}, scale ${scale}`);
+                    const viewport = page.getViewport({ scale });
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.alt = `Preview of page ${pageNum}`;
+
+                    const context = canvas.getContext('2d');
+                    if (!context) {
+                        throw new Error('Failed to get canvas context');
+                    }
+
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    const renderTask = page.render(renderContext);
+                    await renderTask.promise;
+
+                    // Check if canvas has content
+                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+                    const isBlank = imageData.data.every(pixel => pixel === 0 || pixel === 255);
+                    if (isBlank) {
+                        console.warn(`Page ${pageNum} rendered blank on attempt ${attempt + 1}`);
+                        if (attempt < maxRetries) {
+                            console.log(`Retrying with lower scale: ${scale * 0.5}`);
+                            return await renderPage(page, canvas, scale * 0.5, pageNum, maxRetries);
+                        }
+                        throw new Error('Rendered blank after retries');
+                    }
+
+                    console.log(`Page ${pageNum} rendered successfully`);
+                    return true;
+                } catch (error) {
+                    console.error(`Error rendering page ${pageNum}, attempt ${attempt + 1}:`, error);
+                    attempt++;
+                    if (attempt > maxRetries) {
+                        throw error;
+                    }
+                }
+            }
+            return false;
+        }
+
         async function displayFile(file, pageCount, arrayBuffer) {
             const div = document.createElement('div');
             div.className = 'file-item';
@@ -361,60 +496,52 @@
             div.appendChild(previewSection);
             fileList.appendChild(div);
 
+            // Wait for pdf.js to load
+            try {
+                await waitForPdfJs();
+            } catch (error) {
+                console.error('pdf.js not loaded when attempting to render previews:', error);
+                previewSection.innerHTML = '<p class="preview-error">Error: PDF preview library failed to load. Ensure pdf.mjs and pdf.worker.mjs are in the /lib folder, check your internet connection for CDN fallback, or refresh the page.</p>';
+                return;
+            }
+
             // Render PDF page previews
             try {
                 console.log(`Loading PDF: ${file.name}`);
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                 console.log(`PDF loaded with ${pdf.numPages} pages`);
 
-                for (let pageNum = 1; pageNum <= Math.min(pageCount, 50); pageNum++) {
+                for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+                    const pageDiv = document.createElement('div');
+                    pageDiv.className = 'preview-page';
+
+                    const canvas = document.createElement('canvas');
+                    const loading = document.createElement('div');
+                    loading.className = 'preview-loading';
+                    pageDiv.appendChild(canvas);
+                    pageDiv.appendChild(loading);
+                    pageDiv.innerHTML += `<p>Page ${pageNum}</p>`;
+                    previewSection.appendChild(pageDiv);
+
                     try {
                         const page = await pdf.getPage(pageNum);
                         const viewport = page.getViewport({ scale: 1.0 });
                         const scale = 200 / viewport.height;
-                        const scaledViewport = page.getViewport({ scale });
 
-                        const canvas = document.createElement('canvas');
-                        canvas.height = scaledViewport.height;
-                        canvas.width = scaledViewport.width;
-                        canvas.alt = `Preview of page ${pageNum} of ${file.name}`;
-
-                        const context = canvas.getContext('2d');
-                        if (!context) {
-                            throw new Error('Failed to get canvas context');
+                        const success = await renderPage(page, canvas, scale, pageNum);
+                        if (!success) {
+                            pageDiv.innerHTML = `<p class="preview-error">Page ${pageNum}: Failed to load</p>`;
                         }
-
-                        console.log(`Rendering page ${pageNum} at scale ${scale}`);
-                        const renderContext = {
-                            canvasContext: context,
-                            viewport: scaledViewport
-                        };
-                        const renderTask = page.render(renderContext);
-                        await renderTask.promise;
-
-                        // Verify canvas has content
-                        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                        const isBlank = imageData.data.every(pixel => pixel === 0 || pixel === 255);
-                        if (isBlank) {
-                            console.warn(`Page ${pageNum} rendered blank`);
-                        }
-
-                        const pageDiv = document.createElement('div');
-                        pageDiv.className = 'preview-page';
-                        pageDiv.appendChild(canvas);
-                        pageDiv.innerHTML += `<p>Page ${pageNum}</p>`;
-                        previewSection.appendChild(pageDiv);
                     } catch (pageError) {
                         console.error(`Error rendering page ${pageNum}:`, pageError);
-                        const pageDiv = document.createElement('div');
-                        pageDiv.className = 'preview-page';
                         pageDiv.innerHTML = `<p class="preview-error">Page ${pageNum}: Failed to load</p>`;
-                        previewSection.appendChild(pageDiv);
+                    } finally {
+                        loading.remove();
                     }
                 }
             } catch (error) {
                 console.error(`Error loading PDF ${file.name}:`, error);
-                previewSection.innerHTML = '<p class="preview-error">Error loading previews for this PDF</p>';
+                previewSection.innerHTML = '<p class="preview-error">Error loading previews. Please try a different PDF or check the console for details.</p>';
             }
         }
 
