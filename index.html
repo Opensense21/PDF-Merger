@@ -10,9 +10,10 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
+/* Basic styling */
+/* Add more styling for elements as needed */
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: Helvetica, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -220,18 +221,17 @@
         // Handle click to open file input
         dropZone.addEventListener('click', () => fileInput.click());
 
-        // Handle file selection
+        // Handle file selection from input
         fileInput.addEventListener('change', handleFiles);
-        dropZone.addEventListener('dragover', (e) => {
+
+        // Handle drag and drop anywhere on the document
+        document.addEventListener('dragover', (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = '#666';
+            // You can add visual feedback here for dragging over the body
         });
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.style.borderColor = '#ccc';
-        });
-        dropZone.addEventListener('drop', (e) => {
+
+        document.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropZone.style.borderColor = '#ccc';
             handleFiles(e);
         });
 
@@ -312,9 +312,9 @@
         function updateUI() {
             operationSection.style.display = pdfFiles.length > 0 ? 'block' : 'none';
             mergeButton.disabled = pdfFiles.length < 1 || !validatePageRanges();
-            splitButton.disabled = pdfFiles.length === 0 || !validatePageRanges(0);
-            rotateButton.disabled = pdfFiles.length === 0 || !validatePageRanges(0);
-        }
+            splitButton.disabled = pdfFiles.length !== 1 || !validatePageRanges(0); // Split is typically for a single file
+            rotateButton.disabled = pdfFiles.length !== 1 || !validatePageRanges(0); // Rotate is typically for a single file
+        }        
 
         function validatePageRanges(index = -1) {
             if (index >= 0) {
@@ -382,7 +382,7 @@
 
         mergeButton.addEventListener('click', async () => {
             progress.style.display = 'block';
-            try {
+            try { // ➕ emoji added in the HTML button tag
                 const mergedPdf = await mergePDFs();
                 const filename = outputNameInput.value.trim() || 'merged';
                 const finalFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
@@ -415,7 +415,7 @@
         splitButton.addEventListener('click', async () => {
             if (pdfFiles.length === 0) return;
             progress.style.display = 'block';
-            try {
+            try { // ✂️ emoji added in the HTML button tag
                 const zip = new JSZip();
                 const { file, pages, pageCount } = pdfFiles[0];
                 const arrayBuffer = await file.arrayBuffer();
@@ -446,7 +446,7 @@
         rotateButton.addEventListener('click', async () => {
             if (pdfFiles.length === 0) return;
             progress.style.display = 'block';
-            try {
+            try { // 🔄 emoji added in the HTML button tag
                 const { file, pages, pageCount } = pdfFiles[0];
                 const arrayBuffer = await file.arrayBuffer();
                 const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
@@ -481,5 +481,5 @@
             updateUI();
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'93e885ccf8ca6e55',t:'MTc0NzAzODI5Ny4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
