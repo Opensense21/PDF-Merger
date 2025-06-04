@@ -1,0 +1,1124 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Manager</title>
+
+    <!-- Modern Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- PDF-lib for manipulation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+    <!-- PDF.js for rendering previews -->
+    <!-- Use a recent stable version -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Set the workerSrc property for PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <!-- Sortable.js for drag-and-drop -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <!-- Swiper.js for the preview slider -->
+    <link rel="stylesheet" href="https://unpkg.com/swiper@8/swiper-bundle.min.css" />
+    <script src="https://unpkg.com/swiper@8/swiper-bundle.min.js"></script>
+
+     <!-- JSZip for splitting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+
+    <style>
+        /* Basic Reset and Typography */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(to bottom right, #f5f0ff, #e0f2f7); /* Soft pastel gradient */
+            color: #333;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #6a1b9a; /* Deep purple */
+            margin-bottom: 30px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        /* Drop Zone */
+        #dropZone {
+            width: 90%;
+            max-width: 700px;
+            height: 180px;
+            border: 2px dashed #b39ddb; /* Pastel purple */
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+            background-color: #ede7f6; /* Very light purple */
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 1.1em;
+            color: #6a1b9a;
+            padding: 15px;
+        }
+        #dropZone:hover, #dropZone.dragover {
+            border-color: #9575cd; /* Lighter purple */
+            background-color: #d1c4e9; /* Light purple */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        #dropZone i {
+            margin-bottom: 10px;
+            color: #9575cd;
+        }
+
+
+        /* File List */
+        #fileList {
+            width: 90%;
+            max-width: 700px;
+            margin: 20px 0;
+            list-style: none;
+            padding: 0;
+        }
+
+        .file-item-container {
+            margin-bottom: 15px;
+            background-color: #fff;
+            border-radius: 10px;
+            border: 1px solid #e1bee7;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+            overflow: hidden; /* Needed for border-radius and collapsed content */
+            transition: box-shadow 0.2s ease;
+        }
+        .file-item-container:hover {
+             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 18px; /* Adjusted padding */
+            background-color: #fff;
+            cursor: grab; /* Indicate draggable */
+            user-select: none; /* Prevent text selection while dragging */
+        }
+         .file-item-header.sortable-drag {
+             opacity: 0.7;
+         }
+
+        .file-item-info {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+             margin-right: 10px; /* Space between info and actions */
+        }
+
+        .file-name-span {
+            font-weight: 500;
+            color: #4527a0; /* Dark purple */
+             margin-right: 10px;
+             word-break: break-all; /* Prevent long names from breaking layout */
+        }
+
+         .file-page-count {
+             font-size: 0.9em;
+             color: #7e57c2; /* Medium purple */
+             flex-shrink: 0;
+         }
+
+        .page-range-input {
+            flex-grow: 1;
+            margin-left: 15px; /* Space from file name/count */
+            padding: 6px 10px; /* Adjusted padding */
+            max-width: 180px; /* Limit input width */
+            border: 1px solid #e1bee7;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #555;
+            transition: border-color 0.2s ease;
+        }
+        .page-range-input:focus {
+             outline: none;
+             border-color: #9575cd;
+             box-shadow: 0 0 0 2px rgba(149, 117, 205, 0.3);
+        }
+         .page-range-input.invalid {
+             border-color: #e57373; /* Pastel red for invalid input */
+             box-shadow: 0 0 0 2px rgba(229, 115, 115, 0.3);
+         }
+
+
+        .file-actions {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+
+        .action-button {
+            background: none;
+            border: none;
+            color: #6a1b9a;
+            font-size: 1em;
+            cursor: pointer;
+            padding: 8px; /* Increased hit area */
+            margin-left: 5px;
+            transition: color 0.2s ease, transform 0.1s ease;
+            border-radius: 5px; /* For subtle hover background */
+        }
+         .action-button:hover {
+             color: #4a148c;
+             background-color: #f3e5f5; /* Very light purple hover */
+         }
+         .action-button:active {
+             transform: scale(0.95);
+         }
+
+        .remove-button {
+             color: #e57373; /* Pastel red */
+        }
+         .remove-button:hover {
+             color: #ef5350; /* Darker red */
+             background-color: #ffebee; /* Very light red hover */
+         }
+
+
+        /* Preview Section */
+        .preview-container {
+            /* Use max-height for smooth collapsing */
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
+            background-color: #f3e5f5; /* Very light purple background */
+            padding: 0 18px; /* Match header padding horizontally */
+        }
+
+        .preview-container.expanded {
+            max-height: 300px; /* Sufficient height for previews, adjust as needed */
+            padding: 15px 18px; /* Add padding when expanded */
+            overflow-y: hidden; /* Hide vertical scroll, Swiper handles horizontal */
+        }
+
+
+        /* Swiper Styling */
+        .swiper { /* Use .swiper instead of .swiper-container */
+            width: 100%;
+            height: 180px; /* Set height based on thumbnail size */
+            padding-bottom: 10px; /* Space for scrollbar */
+        }
+
+        .swiper-wrapper {
+            /* Swiper handles display: flex */
+        }
+
+        .swiper-slide {
+            width: auto !important; /* Allow slide width to be determined by content */
+            height: 100%; /* Take full height of container */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px; /* Space between slides, Swiper will handle the last one */
+            /* Remove default Swiper width/height if they interfere */
+        }
+
+        .page-thumbnail {
+             display: block; /* Remove extra space below canvas/img */
+             max-height: 150px; /* Max height for the preview image/canvas */
+             width: auto; /* Maintain aspect ratio */
+             border: 1px solid #ce93d8; /* Light purple border */
+             border-radius: 5px;
+             background-color: #fff;
+             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+             object-fit: contain; /* Ensure images fit within bounds */
+        }
+
+         .slide-page-number {
+             margin-top: 5px;
+             font-size: 0.8em;
+             color: #4527a0;
+             font-weight: 500;
+         }
+
+        /* Operation Controls */
+        #controls {
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f3e5f5;
+            border-radius: 10px;
+            border: 1px solid #e1bee7;
+            width: 90%;
+            max-width: 700px;
+            text-align: left; /* Align content to the left */
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+
+            display: flex; /* Use flexbox for layout */
+            flex-direction: column; /* Stack items vertically */
+            gap: 15px; /* Space between rows */
+        }
+
+         #controls > label { /* Style labels directly within controls */
+             display: inline-block;
+             font-weight: 600;
+             color: #4527a0;
+             margin-bottom: 5px; /* Space below label */
+         }
+
+         /* Grouping elements for better flex layout */
+         .control-group {
+             display: flex;
+             align-items: center;
+             flex-wrap: wrap; /* Allow wrapping if needed */
+             gap: 10px; /* Space between items in a row */
+         }
+
+         /* Specific styles for items within groups */
+         .control-group label {
+             margin-bottom: 0; /* Remove bottom margin in group */
+             flex-shrink: 0; /* Prevent label from shrinking */
+         }
+
+         .control-group select,
+         .control-group input[type="text"] {
+             padding: 8px 10px;
+             border: 1px solid #e1bee7;
+             border-radius: 5px;
+             font-size: 1em;
+             color: #555;
+             transition: border-color 0.2s ease, box-shadow 0.2s ease;
+              flex-grow: 1; /* Allow inputs/selects to grow */
+              max-width: none; /* Remove previous max-width */
+         }
+         .control-group select:focus,
+         .control-group input[type="text"]:focus {
+              outline: none;
+              border-color: #9575cd;
+              box-shadow: 0 0 0 2px rgba(149, 117, 205, 0.3);
+         }
+         .control-group select {
+             width: 150px; /* Specific width for select */
+             flex-grow: 0; /* Prevent select from growing too much */
+         }
+          #outputFilename, #watermark {
+              flex-grow: 1; /* Allow filename/watermark to grow */
+              max-width: 350px; /* Set a max-width */
+          }
+           #watermark {
+               min-width: 200px; /* Ensure watermark input is usable */
+           }
+
+
+        /* Radio buttons for Rotate */
+        #rotateOptions {
+             display: inline-block; /* Keep radios inline initially */
+             margin-left: 15px;
+             padding-left: 15px;
+             border-left: 1px solid #e1bee7;
+             flex-grow: 1; /* Allow radios to take space */
+             min-width: 200px; /* Ensure it has some width */
+        }
+        #rotateOptions label { /* Style labels for radio buttons */
+            margin-right: 15px;
+            font-weight: normal;
+            color: #333;
+            cursor: pointer;
+        }
+         #rotateOptions input[type="radio"] {
+             margin-right: 5px;
+             vertical-align: middle;
+         }
+
+
+        /* Buttons */
+        button {
+            padding: 10px 20px;
+            margin: 0 5px; /* Use margin for horizontal space */
+            font-size: 1em;
+            font-weight: 500;
+            cursor: pointer;
+            background-color: #b39ddb; /* Pastel purple */
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            transition: background-color 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+            display: inline-flex; /* Align icon and text */
+            align-items: center;
+            justify-content: center;
+        }
+        button i {
+            margin-right: 8px; /* Space between icon and text */
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #9575cd; /* Lighter purple */
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        button:active:not(:disabled) {
+             transform: translateY(0);
+             box-shadow: none;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            opacity: 0.7;
+            transform: none;
+            box-shadow: none;
+        }
+
+        #process {
+             background-color: #7e57c2; /* Medium purple for primary action */
+             color: white;
+             font-weight: 600;
+             margin-top: 15px; /* Space above process button */
+             width: auto; /* Auto width for process button */
+        }
+         #process:hover:not(:disabled) {
+             background-color: #6a1b9a; /* Dark purple */
+         }
+
+         #startOver {
+             background-color: #e1bee7; /* Pastel pink-purple */
+             color: #4a148c; /* Dark purple */
+             margin-top: 20px;
+         }
+          #startOver:hover:not(:disabled) {
+             background-color: #ce93d8; /* Lighter pink-purple */
+         }
+
+
+        /* Progress Indicator */
+        #progress {
+            display: none;
+            margin: 20px auto;
+            width: 50px; /* Slightly larger */
+            height: 50px;
+            border: 6px solid #f3f3f3;
+            border-top: 6px solid #7e57c2; /* Medium purple */
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+         /* Responsive adjustments */
+         @media (max-width: 600px) {
+             #dropZone, #fileList, #controls {
+                 width: 95%;
+             }
+              .file-item-header {
+                 flex-direction: column;
+                 align-items: flex-start;
+             }
+             .file-item-info {
+                 width: 100%;
+                 margin-bottom: 10px;
+                 margin-right: 0;
+             }
+              .page-range-input {
+                 margin-left: 0;
+                 margin-top: 8px;
+                 width: 100%; /* Full width on small screens */
+                 max-width: none;
+              }
+             .file-actions {
+                 width: 100%;
+                 justify-content: flex-end; /* Align buttons to the right */
+             }
+
+             /* Controls Responsive */
+             #controls {
+                 gap: 10px; /* Smaller gap on mobile */
+             }
+             .control-group {
+                 flex-direction: column; /* Stack items in groups vertically */
+                 align-items: stretch; /* Stretch items */
+                 gap: 5px; /* Smaller gap within stacked group */
+             }
+             .control-group label {
+                  margin-bottom: 0; /* Remove bottom margin when stacked */
+                  flex-shrink: 0;
+             }
+             .control-group select,
+             .control-group input[type="text"] {
+                  width: 100%; /* Full width */
+                  max-width: none;
+                  flex-grow: 1; /* Allow to grow */
+             }
+              #rotateOptions {
+                  margin-left: 0;
+                  padding-left: 0;
+                  border-left: none;
+                  display: block !important; /* Always show radios stacked */
+                  text-align: left;
+                  width: 100%; /* Full width */
+              }
+             #rotateOptions label {
+                  margin-right: 10px; /* Keep some horizontal space for radios */
+             }
+
+              #process {
+                  width: 100%; /* Full width process button */
+                  margin-top: 10px; /* Adjust top margin */
+              }
+         }
+
+    </style>
+</head>
+<body>
+    <h1>PDF Manager</h1>
+
+    <div id="dropZone">
+        <i class="fas fa-cloud-upload-alt fa-4x"></i>
+        <p>Drag & Drop PDFs or Images here<br>or Click to Select Files</p>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" multiple>
+
+    <div id="fileList">
+        <!-- File items will be added here by JavaScript -->
+    </div>
+
+    <div id="controls">
+        <div class="control-group">
+            <label for="operation">Operation:</label>
+            <select id="operation">
+                <option value="merge">Merge</option>
+                <option value="split">Split</option>
+                <option value="rotate">Rotate</option>
+            </select>
+
+            <span id="rotateOptions" style="display: none;">
+                <label><input type="radio" name="rotateDeg" value="90" checked> 90°</label>
+                <label><input type="radio" name="rotateDeg" value="180"> 180°</label>
+                <label><input type="radio" name="rotateDeg" value="270"> 270°</label>
+            </span>
+        </div>
+
+         <div class="control-group">
+            <label for="outputFilename">Output Filename:</label>
+            <input type="text" id="outputFilename" placeholder="e.g., result.pdf" value="">
+         </div>
+
+         <div class="control-group">
+            <label for="watermark">Watermark (optional):</label>
+            <input type="text" id="watermark" placeholder="Enter watermark text">
+         </div>
+
+        <button id="process"><i class="fas fa-play"></i> Process Files</button>
+    </div>
+
+    <div id="progress"></div>
+
+    <button id="startOver"><i class="fas fa-redo"></i> Start Over</button>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const operationSelect = document.getElementById('operation');
+        const rotateOptions = document.getElementById('rotateOptions');
+        const processButton = document.getElementById('process');
+        const outputFilenameInput = document.getElementById('outputFilename');
+        const watermarkInput = document.getElementById('watermark');
+        const startOverButton = document.getElementById('startOver');
+        const progressIndicator = document.getElementById('progress');
+
+        // Store file data { id, file, type, pdfLibDoc, pdfjsDoc, pageCount, pageRangeInput, element, swiperInstance }
+        let filesData = [];
+
+        // Initialize Sortable for drag-and-drop reordering
+        const sortable = new Sortable(fileList, {
+            animation: 150,
+            handle: '.file-item-header',
+            onEnd: function (evt) {
+                const newOrderElements = Array.from(fileList.children);
+                const newOrderData = [];
+                newOrderElements.forEach(itemElement => {
+                    const fileId = itemElement.dataset.fileId;
+                    const fileData = filesData.find(f => f.id === fileId);
+                    if (fileData) {
+                        newOrderData.push(fileData);
+                    }
+                });
+                filesData = newOrderData;
+                updateUI();
+            }
+        });
+
+        // --- Event Listeners ---
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            e.target.value = '';
+        });
+
+        operationSelect.addEventListener('change', updateUI);
+
+        processButton.addEventListener('click', processFiles);
+        startOverButton.addEventListener('click', startOver);
+
+        // --- File Handling and Display ---
+
+        async function handleFiles(newFilesList) {
+             const newFiles = Array.from(newFilesList);
+             if (newFiles.length === 0) return;
+
+             progressIndicator.style.display = 'block';
+             processButton.disabled = true;
+             startOverButton.disabled = true;
+
+             const existingNames = new Set(filesData.map(f => f.file.name));
+             const filesToProcess = newFiles.filter(file =>
+                (file.type === 'application/pdf' || file.type.startsWith('image/')) && !existingNames.has(file.name)
+            );
+
+             if (filesToProcess.length < newFiles.length) {
+                 alert('Some selected files were skipped (not PDF/Image or already added).');
+             }
+
+            for (const file of filesToProcess) {
+                const fileId = 'file_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                let fileData = {
+                    id: fileId,
+                    file: file,
+                    type: file.type,
+                    pdfLibDoc: null,
+                    pdfjsDoc: null,
+                    pageCount: 1,
+                    pageRangeInput: '',
+                    element: null,
+                    swiperInstance: null
+                };
+
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    if (file.type === 'application/pdf') {
+                        fileData.pdfLibDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                        fileData.pageCount = fileData.pdfLibDoc.getPageCount();
+                        fileData.pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    }
+                    filesData.push(fileData);
+                    displayFile(fileData);
+                } catch (error) {
+                    console.error(`Error processing file ${file.name}:`, error);
+                    alert(`Could not process file "${file.name}". It might be corrupted or an unsupported format.`);
+                }
+            }
+
+             progressIndicator.style.display = 'none';
+             startOverButton.disabled = false;
+             updateUI();
+
+             if(filesToProcess.length > 0 && filesData.length > 0) {
+                 filesData[filesData.length - 1].element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+             }
+        }
+
+        function displayFile(fileData) {
+            const { id, file, type, pageCount } = fileData;
+            const container = document.createElement('div');
+            container.className = 'file-item-container';
+            container.dataset.fileId = id;
+            const header = document.createElement('div');
+            header.className = 'file-item-header';
+            const info = document.createElement('div');
+            info.className = 'file-item-info';
+            const fileNameSpan = document.createElement('span');
+            fileNameSpan.textContent = file.name;
+            fileNameSpan.className = 'file-name-span';
+            info.appendChild(fileNameSpan);
+
+            if (type === 'application/pdf') {
+                const pageCountSpan = document.createElement('span');
+                pageCountSpan.textContent = `(${pageCount} pages)`;
+                pageCountSpan.className = 'file-page-count';
+                info.appendChild(pageCountSpan);
+                const pageRangeInput = document.createElement('input');
+                pageRangeInput.type = 'text';
+                pageRangeInput.className = 'page-range-input';
+                pageRangeInput.placeholder = 'e.g., 1,3-5';
+                pageRangeInput.dataset.fileId = id;
+                pageRangeInput.addEventListener('input', (e) => {
+                    const item = filesData.find(f => f.id === id);
+                    if (item) item.pageRangeInput = e.target.value; // Check if item exists
+                    updateUI(); // Call updateUI which will handle validation and class toggling
+                });
+                info.appendChild(pageRangeInput);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'file-actions';
+            const togglePreviewBtn = document.createElement('button');
+            togglePreviewBtn.className = 'action-button toggle-preview-button';
+            togglePreviewBtn.innerHTML = `<i class="fas fa-chevron-down"></i>`;
+            togglePreviewBtn.title = 'Show Previews';
+            if (type !== 'application/pdf') {
+                togglePreviewBtn.disabled = true;
+                togglePreviewBtn.title = 'Previews only for PDFs';
+            }
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'action-button remove-button';
+            removeBtn.innerHTML = `<i class="fas fa-times"></i>`;
+            removeBtn.title = 'Remove File';
+            removeBtn.addEventListener('click', () => removeFile(id));
+            actions.appendChild(togglePreviewBtn);
+            actions.appendChild(removeBtn);
+            header.appendChild(info);
+            header.appendChild(actions);
+            const previewContainer = document.createElement('div');
+            previewContainer.className = 'preview-container';
+            const swiperContainerDiv = document.createElement('div');
+            swiperContainerDiv.className = 'swiper';
+            previewContainer.appendChild(swiperContainerDiv);
+            container.appendChild(header);
+            container.appendChild(previewContainer);
+            fileList.appendChild(container);
+            fileData.element = container;
+
+            let isExpanded = false;
+            togglePreviewBtn.addEventListener('click', async () => {
+                if (fileData.type !== 'application/pdf') return;
+                isExpanded = !isExpanded;
+                if (isExpanded) {
+                    previewContainer.classList.add('expanded');
+                    togglePreviewBtn.innerHTML = `<i class="fas fa-chevron-up"></i>`;
+                    togglePreviewBtn.title = 'Hide Previews';
+                    if (!fileData.swiperInstance) {
+                        progressIndicator.style.display = 'block';
+                        startOverButton.disabled = true;
+                        await generatePreview(fileData, swiperContainerDiv);
+                        progressIndicator.style.display = 'none';
+                        startOverButton.disabled = false;
+                    }
+                } else {
+                    previewContainer.classList.remove('expanded');
+                    togglePreviewBtn.innerHTML = `<i class="fas fa-chevron-down"></i>`;
+                    togglePreviewBtn.title = 'Show Previews';
+                }
+            });
+            updateUI();
+        }
+
+        async function generatePreview(fileData, swiperContainerElement) {
+            const { pdfjsDoc, pageCount } = fileData;
+            if (!pdfjsDoc) {
+                swiperContainerElement.innerHTML = "<p style='text-align:center; color:red;'>Could not load PDF for preview.</p>";
+                return;
+            }
+            try {
+                if (fileData.swiperInstance) {
+                    fileData.swiperInstance.destroy(true, true);
+                    fileData.swiperInstance = null;
+                }
+                const swiperWrapper = document.createElement('div');
+                swiperWrapper.className = 'swiper-wrapper';
+                swiperContainerElement.innerHTML = '';
+                swiperContainerElement.appendChild(swiperWrapper);
+                const thumbnailHeight = 150;
+                for (let i = 1; i <= pageCount; i++) {
+                    const page = await pdfjsDoc.getPage(i);
+                    const viewport = page.getViewport({ scale: 1 });
+                    const scale = thumbnailHeight / viewport.height;
+                    const scaledViewport = page.getViewport({ scale });
+                    const swiperSlide = document.createElement('div');
+                    swiperSlide.className = 'swiper-slide';
+                    const canvas = document.createElement('canvas');
+                    canvas.className = 'page-thumbnail';
+                    canvas.width = scaledViewport.width;
+                    canvas.height = scaledViewport.height;
+                    const context = canvas.getContext('2d');
+                    await page.render({ canvasContext: context, viewport: scaledViewport }).promise;
+                    const pageNumberSpan = document.createElement('span');
+                    pageNumberSpan.className = 'slide-page-number';
+                    pageNumberSpan.textContent = `Page ${i}`;
+                    swiperSlide.appendChild(canvas);
+                    swiperSlide.appendChild(pageNumberSpan);
+                    swiperWrapper.appendChild(swiperSlide);
+                }
+                fileData.swiperInstance = new Swiper(swiperContainerElement, {
+                    slidesPerView: 'auto',
+                    spaceBetween: 15,
+                    grabCursor: true,
+                    freeMode: true,
+                });
+            } catch (error) {
+                console.error(`Error rendering preview for ${fileData.file.name}:`, error);
+                swiperContainerElement.innerHTML = `<p style='text-align:center; color:red;'>Error loading previews.</p>`;
+                if (fileData.swiperInstance) {
+                    fileData.swiperInstance.destroy(true, true);
+                    fileData.swiperInstance = null;
+                }
+            }
+        }
+
+        function removeFile(fileId) {
+            const fileDataIndex = filesData.findIndex(f => f.id === fileId);
+            if (fileDataIndex > -1) {
+                const fileData = filesData[fileDataIndex];
+                if (fileData.swiperInstance) fileData.swiperInstance.destroy(true, true);
+                if (fileData.pdfjsDoc) fileData.pdfjsDoc.destroy().catch(e => console.error('Error destroying pdfjs doc:', e));
+                if (fileData.element && fileData.element.parentNode) fileData.element.parentNode.removeChild(fileData.element);
+                filesData.splice(fileDataIndex, 1);
+                updateUI();
+            }
+        }
+
+        // --- Validation Function ---
+        function validateAllInputs() {
+            const selectedOperation = operationSelect.value;
+
+            if (filesData.length === 0) {
+                return false; // Cannot process if no files are uploaded
+            }
+
+            let allPageRangesAreValid = true;
+            filesData.forEach(fileData => {
+                if (fileData.type === 'application/pdf') {
+                    const pageRangeInputEl = fileData.element.querySelector('.page-range-input');
+                    // If input has content AND it's invalid according to validatePageRangesForFile
+                    if (fileData.pageRangeInput.trim() !== '' && !validatePageRangesForFile(fileData.id)) {
+                        allPageRangesAreValid = false;
+                        if (pageRangeInputEl) pageRangeInputEl.classList.add('invalid');
+                    } else {
+                        // If input is empty or valid, remove invalid class
+                        if (pageRangeInputEl) pageRangeInputEl.classList.remove('invalid');
+                    }
+                }
+            });
+
+            if (!allPageRangesAreValid) {
+                return false;
+            }
+
+            // Check operation-specific file requirements
+            if (selectedOperation === 'merge') {
+                return filesData.length >= 1;
+            } else if (selectedOperation === 'split' || selectedOperation === 'rotate') {
+                return filesData.length === 1 && filesData[0].type === 'application/pdf';
+            }
+            return false; // Default to false if unknown operation
+        }
+
+
+        // --- UI State Management ---
+        function updateUI() {
+            const hasFiles = filesData.length > 0;
+            const selectedOperation = operationSelect.value;
+
+            document.getElementById('controls').style.display = hasFiles ? 'flex' : 'none';
+            startOverButton.style.display = hasFiles || progressIndicator.style.display !== 'none' ? 'inline-block' : 'none';
+
+            // Process button state is now handled by validateAllInputs
+            const isValidForProcessing = validateAllInputs();
+            processButton.disabled = !isValidForProcessing;
+
+            // Update .invalid class for page range inputs based on current state
+            // This is also done in validateAllInputs, but good to ensure it's consistent here too
+            filesData.forEach(fileData => {
+                if (fileData.type === 'application/pdf') {
+                    const pageRangeInputEl = fileData.element.querySelector('.page-range-input');
+                    if (pageRangeInputEl) {
+                        if (fileData.pageRangeInput.trim() !== '' && !validatePageRangesForFile(fileData.id)) {
+                            pageRangeInputEl.classList.add('invalid');
+                        } else {
+                            pageRangeInputEl.classList.remove('invalid');
+                        }
+                    }
+                }
+            });
+
+
+            rotateOptions.style.display = selectedOperation === 'rotate' ? 'inline-block' : 'none';
+
+            if (selectedOperation === 'merge') {
+                outputFilenameInput.placeholder = 'e.g., merged.pdf';
+                if (outputFilenameInput.value === '' || outputFilenameInput.value.startsWith('split') || outputFilenameInput.value.startsWith('rotated')) {
+                    outputFilenameInput.value = 'merged.pdf';
+                }
+            } else if (selectedOperation === 'split') {
+                outputFilenameInput.placeholder = 'e.g., chapter';
+                if (outputFilenameInput.value === '' || outputFilenameInput.value.startsWith('merged') || outputFilenameInput.value.startsWith('rotated')) {
+                    const firstPdf = filesData.find(f => f.type === 'application/pdf');
+                    outputFilenameInput.value = firstPdf ? firstPdf.file.name.replace(/\.pdf$/i, '') : 'split';
+                }
+            } else if (selectedOperation === 'rotate') {
+                outputFilenameInput.placeholder = 'e.g., document.pdf';
+                if (outputFilenameInput.value === '' || outputFilenameInput.value.startsWith('merged') || outputFilenameInput.value.startsWith('split')) {
+                    const firstPdf = filesData.find(f => f.type === 'application/pdf');
+                    outputFilenameInput.value = firstPdf ? `rotated_${firstPdf.file.name}` : 'rotated.pdf';
+                }
+            }
+            if (selectedOperation === 'rotate' && !document.querySelector('input[name="rotateDeg"]:checked')) {
+                const defaultRotateRadio = document.querySelector('input[name="rotateDeg"][value="90"]');
+                if (defaultRotateRadio) defaultRotateRadio.checked = true;
+            }
+        }
+
+        // --- Page Range Parsing and Validation ---
+        function validatePageRangesForFile(fileId) {
+            const fileData = filesData.find(f => f.id === fileId);
+            if (!fileData || fileData.type !== 'application/pdf') return true;
+            const range = fileData.pageRangeInput.trim();
+            if (!range) return true;
+            try {
+                const indices = parsePageRanges(range, fileData.pageCount);
+                return indices.length > 0;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function parsePageRanges(range, totalPages) {
+            const indices = [];
+            const parts = range.split(',').map(p => p.trim()).filter(p => p !== '');
+            if (parts.length === 0) {
+                if (range.trim() !== '') throw new Error('Invalid format');
+                return Array.from({ length: totalPages }, (_, i) => i); // All pages if input was empty or only whitespace
+            }
+            for (const part of parts) {
+                if (part.includes('-')) {
+                    const [startStr, endStr] = part.split('-').map(n => n.trim());
+                    const start = parseInt(startStr);
+                    const end = parseInt(endStr);
+                    if (isNaN(start) || isNaN(end) || start < 1 || end > totalPages || start > end) {
+                        throw new Error(`Invalid range "${part}"`);
+                    }
+                    for (let i = start; i <= end; i++) indices.push(i - 1);
+                } else {
+                    const num = parseInt(part);
+                    if (isNaN(num) || num < 1 || num > totalPages) {
+                        throw new Error(`Invalid page number "${part}"`);
+                    }
+                    indices.push(num - 1);
+                }
+            }
+            return [...new Set(indices)].sort((a, b) => a - b);
+        }
+
+        // --- PDF/Image Processing Functions ---
+        async function processFiles() {
+            if (!validateAllInputs()) { // Use the new validation function
+                alert("Please fix invalid page ranges (highlighted in red) or ensure the correct number/type of files are selected for the chosen operation.");
+                // Ensure button states are correct if validation fails early
+                progressIndicator.style.display = 'none';
+                processButton.disabled = false; // This should already be set by updateUI if validation fails, but safe to ensure.
+                startOverButton.disabled = false;
+                return;
+            }
+
+            progressIndicator.style.display = 'block';
+            processButton.disabled = true;
+            startOverButton.disabled = true;
+
+            const operation = operationSelect.value;
+            const watermarkText = watermarkInput.value.trim();
+            const outputName = outputFilenameInput.value.trim();
+
+            try {
+                if (operation === 'merge') {
+                    await mergeFiles(watermarkText, outputName);
+                } else if (operation === 'split') {
+                    await splitFiles(watermarkText, outputName);
+                } else if (operation === 'rotate') {
+                    const degrees = parseInt(document.querySelector('input[name="rotateDeg"]:checked')?.value);
+                    if (isNaN(degrees)) { // Should be caught by radio default
+                        alert('Invalid rotation angle.'); return;
+                    }
+                    await rotateFiles(degrees, watermarkText, outputName);
+                } else {
+                    alert("Unknown operation selected.");
+                }
+                if (operation) alert("Operation completed successfully!"); // Check if operation was valid before success msg
+            } catch (error) {
+                console.error("Processing Error:", error);
+                alert('An error occurred during processing: ' + error.message);
+            } finally {
+                progressIndicator.style.display = 'none';
+                // updateUI will correctly set processButton.disabled
+                startOverButton.disabled = false;
+                updateUI();
+            }
+        }
+
+        async function addWatermark(pdfDoc, text) {
+            if (!text) return;
+            try {
+                const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+                const pages = pdfDoc.getPages();
+                for (const page of pages) {
+                    const { width, height } = page.getSize();
+                    const textFontSize = 40;
+                    const textWidth = font.widthOfTextAtSize(text, textFontSize);
+                    const textHeight = font.heightAtSize(textFontSize);
+                    page.drawText(text, {
+                        x: width / 2 - textWidth / 2,
+                        y: height / 2 - textHeight / 2,
+                        size: textFontSize, font,
+                        color: PDFLib.rgb(0.6, 0.6, 0.6), opacity: 0.4,
+                        rotate: PDFLib.degrees(45),
+                    });
+                }
+            } catch (error) {
+                console.error("Error adding watermark:", error);
+                alert("Could not add watermark: " + error.message);
+            }
+        }
+
+        async function mergeFiles(watermarkText, outputName) {
+            const pdfDoc = await PDFLib.PDFDocument.create();
+            for (const fileData of filesData) {
+                try {
+                    const pageIndicesToParse = fileData.pageRangeInput.trim() === '' && fileData.type === 'application/pdf' ? `1-${fileData.pageCount}` : fileData.pageRangeInput;
+
+                    if (fileData.type === 'application/pdf') {
+                        const pageIndices = parsePageRanges(pageIndicesToParse, fileData.pageCount);
+                        if (pageIndices.length > 0) {
+                            const copiedPages = await pdfDoc.copyPages(fileData.pdfLibDoc, pageIndices);
+                            copiedPages.forEach(page => pdfDoc.addPage(page));
+                        } else if (fileData.pageRangeInput.trim() !== '') {
+                            console.warn(`Skipping ${fileData.file.name} due to invalid/empty page range selection: "${fileData.pageRangeInput}"`);
+                        }
+                    } else if (fileData.type.startsWith('image/')) {
+                        const arrayBuffer = await fileData.file.arrayBuffer();
+                        let embeddedImage;
+                        if (fileData.type === 'image/png') embeddedImage = await pdfDoc.embedPng(arrayBuffer);
+                        else if (fileData.type === 'image/jpeg') embeddedImage = await pdfDoc.embedJpg(arrayBuffer);
+                        else { console.warn(`Skipping image: ${fileData.file.name}`); continue; }
+                        const page = pdfDoc.addPage([embeddedImage.width, embeddedImage.height]);
+                        page.drawImage(embeddedImage, { x: 0, y: 0, width: embeddedImage.width, height: embeddedImage.height });
+                    }
+                } catch (error) {
+                    console.error(`Error merging file ${fileData.file.name}:`, error);
+                    alert(`Error merging file "${fileData.file.name}": ${error.message}. Skipping this file.`);
+                }
+            }
+            if (pdfDoc.getPageCount() === 0) {
+                throw new Error("No valid pages or images were added. Merged document would be empty.");
+            }
+            await addWatermark(pdfDoc, watermarkText);
+            const pdfBytes = await pdfDoc.save();
+            const finalFilename = outputName.endsWith('.pdf') ? outputName : `${outputName || 'merged_result'}.pdf`;
+            download(pdfBytes, finalFilename, 'application/pdf');
+        }
+
+        async function splitFiles(watermarkText, outputName) {
+            if (filesData.length !== 1 || filesData[0].type !== 'application/pdf') {
+                throw new Error("Splitting requires exactly one PDF file.");
+            }
+            const fileData = filesData[0];
+            const pageRangeToParse = fileData.pageRangeInput.trim() === '' ? `1-${fileData.pageCount}` : fileData.pageRangeInput;
+            const pageIndices = parsePageRanges(pageRangeToParse, fileData.pageCount);
+            if (pageIndices.length === 0) {
+                throw new Error("Selected page range resulted in no valid pages to split.");
+            }
+            const zip = new JSZip();
+            const srcDoc = fileData.pdfLibDoc;
+            for (const pageIndex of pageIndices) {
+                try {
+                    const newDoc = await PDFLib.PDFDocument.create();
+                    const [copiedPage] = await newDoc.copyPages(srcDoc, [pageIndex]);
+                    newDoc.addPage(copiedPage);
+                    await addWatermark(newDoc, watermarkText);
+                    const pdfBytes = await newDoc.save();
+                    const originalBaseName = fileData.file.name.replace(/\.pdf$/i, '');
+                    const zipFilename = `${outputName || originalBaseName}_page_${pageIndex + 1}.pdf`;
+                    zip.file(zipFilename, pdfBytes);
+                } catch (error) {
+                    console.error(`Error splitting page ${pageIndex + 1}:`, error);
+                    alert(`Error splitting page ${pageIndex + 1}: ${error.message}. Skipping.`);
+                }
+            }
+            const zipBlob = await zip.generateAsync({ type: 'blob' });
+            const finalZipFilename = outputName.endsWith('.zip') ? outputName : `${outputName || 'split_result'}.zip`;
+            download(zipBlob, finalZipFilename, 'application/zip');
+        }
+
+        async function rotateFiles(degrees, watermarkText, outputName) {
+            if (filesData.length !== 1 || filesData[0].type !== 'application/pdf') {
+                throw new Error("Rotation requires exactly one PDF file.");
+            }
+            const fileData = filesData[0];
+            const pdfDoc = fileData.pdfLibDoc;
+            const pageRangeToParse = fileData.pageRangeInput.trim() === '' ? `1-${fileData.pageCount}` : fileData.pageRangeInput;
+            const pageIndices = parsePageRanges(pageRangeToParse, fileData.pageCount);
+            if (pageIndices.length === 0) {
+                throw new Error("Selected page range resulted in no valid pages to rotate.");
+            }
+            for (const index of pageIndices) {
+                try {
+                    const page = pdfDoc.getPage(index);
+                    const currentRotation = page.getRotation().angle || 0;
+                    page.setRotation(PDFLib.degrees(currentRotation + degrees));
+                } catch (error) {
+                    console.error(`Error rotating page ${index + 1}:`, error);
+                    alert(`Error rotating page ${index + 1}: ${error.message}. Skipping.`);
+                }
+            }
+            await addWatermark(pdfDoc, watermarkText);
+            const pdfBytes = await pdfDoc.save();
+            const finalFilename = outputName.endsWith('.pdf') ? outputName : `${outputName || 'rotated_result'}.pdf`;
+            download(pdfBytes, finalFilename, 'application/pdf');
+        }
+
+        // --- Utility Functions ---
+        function download(data, filename, type) {
+            const blob = new Blob([data], { type });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        function startOver() {
+            filesData.forEach(fileData => {
+                if (fileData.swiperInstance) fileData.swiperInstance.destroy(true, true);
+                if (fileData.pdfjsDoc) fileData.pdfjsDoc.destroy().catch(e => console.error('Error destroying pdfjs doc:', e));
+            });
+            filesData = [];
+            fileList.innerHTML = '';
+            outputFilenameInput.value = '';
+            watermarkInput.value = '';
+            operationSelect.value = 'merge';
+            const defaultRotateRadio = document.querySelector('input[name="rotateDeg"][value="90"]');
+            if (defaultRotateRadio) defaultRotateRadio.checked = true;
+            updateUI();
+            progressIndicator.style.display = 'none';
+        }
+
+        // --- Initial Setup ---
+        updateUI();
+    </script>
+</body>
+</html>
